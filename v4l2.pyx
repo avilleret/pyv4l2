@@ -94,6 +94,12 @@ cdef class Frame:
             buf.length = self._yuv_buffer.shape[0]
             return buf
 
+    property yuv_buffer:
+        def __get__(self):
+            if self._yuv_converted is False:
+                self.jpeg2yuv()
+            cdef np.uint8_t[::1] view = <np.uint8_t[:self._yuv_buffer.shape[0]]>&self._yuv_buffer[0]
+            return view
 
     property yuv:
         def __set__(self,val):
@@ -341,7 +347,8 @@ cdef class Capture:
         for a in range(attemps)[::-1]:
             try:
                 frame = self.get_frame()
-            except:
+            except Exception as e:
+                logger.warning(e)
                 logger.warning('Could not get Frame on "%s". Trying %s more times.'%(self.dev_name,a))
                 self.restart()
             else: 
@@ -402,8 +409,8 @@ cdef class Capture:
                 raise Exception("JPEG header corrupted.")
 
         elif self._transport_format == v4l2.V4L2_PIX_FMT_YUYV:
-            raise Exception("Transport format YUYV is not implemented")
-            # out_frame._yuyv_buffer = buf
+            #raise Exception("Transport format YUYV is not implemented")
+            out_frame._yuv_buffer = buf
         else:
             raise Exception("Tranport format data '%s' is not implemented."%self.transport_format)
         return out_frame
@@ -572,10 +579,10 @@ cdef class Capture:
         format.fmt.pix.pixelformat = self._transport_format
 
 
-        format.fmt.pix.field       = v4l2.V4L2_FIELD_ANY
-        if self.xioctl(v4l2.VIDIOC_S_FMT, &format) == -1:
-            self.close()
-            raise Exception("Could not set v4l2 format")
+        #format.fmt.pix.field       = v4l2.V4L2_FIELD_ANY
+        #if self.xioctl(v4l2.VIDIOC_S_FMT, &format) == -1:
+        #    self.close()
+        #    raise Exception("Could not set v4l2 format")
 
     cdef set_streamparm(self):
         cdef v4l2.v4l2_streamparm streamparm
@@ -585,7 +592,7 @@ cdef class Capture:
         if self.xioctl(v4l2.VIDIOC_S_PARM, &streamparm) == -1:
             self.close()
             raise Exception("Could not set v4l2 parameters")
-       
+
 
     cdef get_format(self):
         cdef v4l2.v4l2_format format
